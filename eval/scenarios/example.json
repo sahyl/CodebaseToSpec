@@ -1,0 +1,8 @@
+{
+  "repo_root": "/path/to/target/repo",
+  "feature_request": "Add rate limiting to the API endpoints",
+  "expected_files": [
+    "src/middleware.py",
+    "src/api/routes.py"
+  ]
+}

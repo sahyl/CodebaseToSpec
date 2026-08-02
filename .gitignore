@@ -1,0 +1,7 @@
+eval-targets/
+.env
+__pycache__/
+*.pyc
+.venv/
+data/
+
