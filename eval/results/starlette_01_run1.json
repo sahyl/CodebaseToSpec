@@ -1,0 +1,25 @@
+{
+  "scenario_id": "starlette_01",
+  "run_number": 1,
+  "timestamp": "2026-08-09T18:28:12.139647Z",
+  "elapsed_seconds": 39.97,
+  "passed": true,
+  "attempts_used": 1,
+  "plan": [
+    {
+      "order": 1,
+      "file_path": "starlette/routing.py",
+      "symbol": "compile_path",
+      "action": "modify",
+      "rationale": "Replace runtime assert statements with explicit ValueError exceptions to ensure checks are preserved under Python optimizations."
+    }
+  ],
+  "errors": [],
+  "expected_files": [
+    "starlette/routing.py"
+  ],
+  "missing_expected_files": [],
+  "extra_files": [],
+  "manual_score": 5,
+  "manual_notes": "matches hand-written reference exactly — same file, symbol, action, and correct reasoning about assert being stripped under -O"
+}
