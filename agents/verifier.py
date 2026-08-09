@@ -17,9 +17,18 @@ from tools.mongo_tools import get_file, get_symbol
 
 
 class VerifierAgent:
-    def __init__(self, db: Database, repo_root: str) -> None:
+    def __init__(self, db: Database, repo_root: str | None = None) -> None:
         self.db = db
-        self.repo_root = Path(repo_root).resolve()
+        if repo_root is None:
+            effective_root = Path.cwd()
+            print(
+                f"[Verifier] WARNING: no repo_root provided, "
+                f"checking file existence against cwd: {effective_root}"
+            )
+        else:
+            effective_root = Path(repo_root).resolve()
+        self.repo_root = effective_root
+
 
     def verify(self, plan: ImplementationPlan) -> VerifierResult:
         """

@@ -52,14 +52,34 @@ Available tools:
   get_symbols_for_file {"rel_path": "..."}
   get_neighbors {"rel_path": "..."}
 
-When you have enough information, output PLAN with a JSON array of steps:
-[{"order":1,"file_path":"...","symbol":"...","action":"modify","rationale":"..."}]
+When you have enough information, output PLAN with a JSON array of steps.
+You MUST explicitly populate the "order" field for every step, starting from 1.
+
+Example of a valid PLAN output:
+PLAN:
+[
+  {
+    "order": 1,
+    "file_path": "src/utils.py",
+    "symbol": "clean_input",
+    "action": "modify",
+    "rationale": "Add validation logic to the input helper."
+  },
+  {
+    "order": 2,
+    "file_path": "src/main.py",
+    "symbol": "main",
+    "action": "modify",
+    "rationale": "Call the updated input helper and handle validation errors."
+  }
+]
 
 Rules:
 - Never invent file paths or function names. Only use what you've observed.
-- symbol field is the qualified_name from the graph, or null for new files.
-- action is one of: modify, create, delete.
-- rationale is one sentence max.
+- The "order" field is required and must be an integer sequence (1, 2, 3, ...).
+- The "symbol" field is the qualified_name from the graph, or null for new files.
+- The "action" field is one of: modify, create, delete.
+- The "rationale" field is one sentence max.
 """
 
 
@@ -136,5 +156,12 @@ class PlannerAgent:
         except json.JSONDecodeError as e:
             raise ValueError(f"[Planner] Model output invalid JSON: {e}\nRaw:\n{raw_json}") from e
 
-        steps = [PlanStep(**s) for s in data]
+        # Defensively inject 1-based order from list position if the model omitted it.
+        steps = []
+        for i, s in enumerate(data, start=1):
+            if "order" not in s:
+                print(f"[Planner] WARNING: step {i} missing 'order' field — assigning {i} from position")
+                s = {"order": i, **s}
+            steps.append(PlanStep(**s))
+
         return ImplementationPlan(feature_request=feature_request, steps=steps, attempt=attempt)

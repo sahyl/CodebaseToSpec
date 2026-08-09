@@ -3,7 +3,8 @@ CLI entrypoint.
 
 Usage:
   python main.py explore <repo_path>
-  python main.py plan "<feature request>"
+  python main.py plan eval/scenarios/starlette_01.json   # preferred: reads repo_root + feature_request
+  python main.py plan "<free-text feature request>"      # fallback: repo_root defaults to cwd
 
 Env vars:
   GEMINI_API_KEY  — required for `plan`
@@ -13,9 +14,10 @@ Env vars:
 
 from __future__ import annotations
 
+import json
 import os
 import sys
-import json
+from pathlib import Path
 
 from agents.explorer import ExplorerAgent
 from agents.planner import PlannerAgent
@@ -31,15 +33,32 @@ def cmd_explore(repo_path: str) -> None:
     agent.explore(repo_path)
 
 
-def cmd_plan(feature_request: str) -> None:
+def cmd_plan(arg: str) -> None:
+    """
+    arg is either:
+      - a path to a scenario JSON (ends with .json and the file exists)
+        → reads repo_root and feature_request from the JSON
+      - a free-text feature request string
+        → repo_root is None; Verifier will log the cwd fallback explicitly
+    """
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         sys.exit("ERROR: GEMINI_API_KEY env var not set")
 
+    # Resolve arg: scenario JSON or free-text?
+    scenario_path = Path(arg)
+    if arg.endswith(".json") and scenario_path.exists():
+        scenario = json.loads(scenario_path.read_text())
+        feature_request: str = scenario["feature_request"]
+        repo_root: str | None = scenario.get("repo_root")  # may be absent
+        print(f"[main] Loaded scenario from {arg}")
+        print(f"[main] repo_root: {repo_root!r}")
+        print(f"[main] feature_request: {feature_request!r}")
+    else:
+        feature_request = arg
+        repo_root = None  # Verifier will log the cwd fallback
+
     db = get_db()
-    # Planner needs repo_root to resolve file paths for Verifier.
-    # We infer it from the graph's stored paths (all relative) — pass cwd.
-    repo_root = os.getcwd()
 
     planner = PlannerAgent(db, api_key)
     verifier = VerifierAgent(db, repo_root)
@@ -72,7 +91,8 @@ def cmd_plan(feature_request: str) -> None:
 def main() -> None:
     if len(sys.argv) < 3:
         print("Usage: python main.py explore <repo_path>")
-        print("       python main.py plan \"<feature request>\"")
+        print("       python main.py plan eval/scenarios/starlette_01.json")
+        print("       python main.py plan \"<free-text feature request>\"")
         sys.exit(1)
 
     command = sys.argv[1]

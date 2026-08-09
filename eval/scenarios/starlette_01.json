@@ -1,0 +1,7 @@
+{
+  "repo_root": "./eval-targets/starlette",
+  "feature_request": "In starlette/routing.py, replace the assert used for runtime validation in compile_path with an explicit exception, since assert statements are stripped when Python runs with -O optimization and would silently remove the check.",
+  "expected_files": [
+    "starlette/routing.py"
+  ]
+}

@@ -19,7 +19,7 @@ import time
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.5-flash"
 
 # Transport-level only — not to be confused with Verifier re-plan retries
 _MAX_TRANSPORT_RETRIES = 4
