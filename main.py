@@ -63,6 +63,7 @@ def cmd_plan(arg: str) -> None:
     planner = PlannerAgent(db, api_key)
     verifier = VerifierAgent(db, repo_root)
 
+    plans_history: list[dict] = []
     prior_errors: list[str] = []
 
     for attempt in range(1, MAX_RETRIES + 1):
@@ -72,9 +73,19 @@ def cmd_plan(arg: str) -> None:
         print(f"[main] Verifying plan ({len(plan.steps)} steps)...")
         result = verifier.verify(plan)
 
+        attempt_record = {
+            "attempt": attempt,
+            "passed": result.passed,
+            "plan": plan.model_dump(),
+            "errors": [e.model_dump() for e in result.errors]
+        }
+        plans_history.append(attempt_record)
+
         if result.passed:
             print("\n✅ Plan verified. Final plan:\n")
             print(json.dumps([s.model_dump() for s in plan.steps], indent=2))
+            print("\n[main] Full attempts history with traces:")
+            print(json.dumps(plans_history, indent=2))
             return
 
         prior_errors = [f"Step {e.step_order} ({e.file_path}:{e.symbol}): {e.reason}"
@@ -85,6 +96,8 @@ def cmd_plan(arg: str) -> None:
     print(f"\n❌ Plan failed verification after {MAX_RETRIES} attempts. Last errors:")
     for e in prior_errors:
         print(f"  {e}")
+    print("\n[main] Full attempts history with traces:")
+    print(json.dumps(plans_history, indent=2))
     sys.exit(1)
 
 

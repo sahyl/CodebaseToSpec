@@ -10,7 +10,7 @@ MongoDB collections:
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -75,11 +75,23 @@ class PlanStep(BaseModel):
     rationale: str                   # one-line explanation
 
 
+class ReActStep(BaseModel):
+    """One step in the ReAct loop process."""
+    step_number: int
+    step_type: Literal["thought", "action", "observe", "plan"]
+    raw_content: str
+    tool_name: Optional[str] = None
+    tool_args: Optional[dict] = None
+    tool_result: Optional[str] = None
+    duration_seconds: float
+
+
 class ImplementationPlan(BaseModel):
     """Full plan output from the Planner agent."""
     feature_request: str
     steps: list[PlanStep] = Field(default_factory=list)
     attempt: int = 1                 # which retry pass produced this plan
+    trace: list[ReActStep] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
