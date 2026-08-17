@@ -26,7 +26,7 @@ from typing import Any
 
 from pymongo.database import Database
 
-from models.schemas import ImplementationPlan, PlanStep
+from models.schemas import ImplementationPlan, PlanStep, ReActStep
 from tools.llm_client import Message, call_llm
 from tools.ast_tools import signatures_only
 from tools.mongo_tools import (
@@ -100,6 +100,10 @@ class PlannerAgent:
         Run the ReAct loop and return an ImplementationPlan.
         prior_errors (from Verifier) are injected into the initial prompt on retry.
         """
+        import time
+        trace: list[ReActStep] = []
+        step_counter = 1
+
         messages: list[Message] = []
 
         user_text = f"Feature request: {feature_request}"
@@ -110,19 +114,70 @@ class PlannerAgent:
         messages.append({"role": "user", "content": user_text})
 
         for step in range(MAX_STEPS):
+            t0 = time.perf_counter()
             reply = call_llm(SYSTEM_PROMPT, messages, api_key=self._api_key)
+            duration_llm = time.perf_counter() - t0
             messages.append({"role": "model", "content": reply})
 
             if reply.startswith("PLAN:"):
                 raw_json = reply[len("PLAN:"):].strip()
-                return self._parse_plan(raw_json, feature_request, attempt)
+                trace.append(ReActStep(
+                    step_number=step_counter,
+                    step_type="plan",
+                    raw_content=reply,
+                    duration_seconds=duration_llm
+                ))
+                # ponytail: minimum implementation, return trace directly in parse_plan
+                return self._parse_plan(raw_json, feature_request, attempt, trace)
 
             if reply.startswith("ACTION:"):
+                tool_name = None
+                tool_args = None
+                match = re.match(r"ACTION:\s*(\w+)\s*(.*)", reply, re.DOTALL)
+                if match:
+                    tool_name = match.group(1)
+                    raw_args = match.group(2).strip()
+                    try:
+                        tool_args = json.loads(raw_args) if raw_args else {}
+                    except Exception:
+                        pass
+
+                trace.append(ReActStep(
+                    step_number=step_counter,
+                    step_type="action",
+                    raw_content=reply,
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    duration_seconds=duration_llm
+                ))
+                step_counter += 1
+
+                t1 = time.perf_counter()
                 obs = self._dispatch_action(reply)
+                duration_tool = time.perf_counter() - t1
+
                 messages.append({"role": "user", "content": f"OBSERVATION:\n{obs}"})
+
+                trace.append(ReActStep(
+                    step_number=step_counter,
+                    step_type="observe",
+                    raw_content=f"OBSERVATION:\n{obs}",
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    tool_result=obs,
+                    duration_seconds=duration_tool
+                ))
+                step_counter += 1
                 continue
 
             # THOUGHT or unrecognised — just continue the loop
+            trace.append(ReActStep(
+                step_number=step_counter,
+                step_type="thought",
+                raw_content=reply,
+                duration_seconds=duration_llm
+            ))
+            step_counter += 1
             messages.append({"role": "user", "content": "Continue. Output ACTION or PLAN next."})
 
         raise RuntimeError(f"[Planner] ReAct loop hit MAX_STEPS={MAX_STEPS} without producing a plan.")
@@ -150,7 +205,7 @@ class PlannerAgent:
             return f"ERROR: tool raised {type(e).__name__}: {e}"
 
     @staticmethod
-    def _parse_plan(raw_json: str, feature_request: str, attempt: int) -> ImplementationPlan:
+    def _parse_plan(raw_json: str, feature_request: str, attempt: int, trace: list[ReActStep]) -> ImplementationPlan:
         try:
             data = json.loads(raw_json)
         except json.JSONDecodeError as e:
@@ -164,4 +219,4 @@ class PlannerAgent:
                 s = {"order": i, **s}
             steps.append(PlanStep(**s))
 
-        return ImplementationPlan(feature_request=feature_request, steps=steps, attempt=attempt)
+        return ImplementationPlan(feature_request=feature_request, steps=steps, attempt=attempt, trace=trace)

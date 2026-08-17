@@ -53,10 +53,20 @@ def run_scenario(scenario_path: str) -> None:
     passed = False
     attempts_used = 0
 
+    plans_history = []
     for attempt in range(1, MAX_RETRIES + 1):
         attempts_used = attempt
         plan = planner.plan(feature_request, attempt=attempt, prior_errors=prior_errors or None)
         result = verifier.verify(plan)
+
+        attempt_record = {
+            "attempt": attempt,
+            "passed": result.passed,
+            "plan": plan.model_dump(),
+            "errors": [e.model_dump() for e in result.errors]
+        }
+        plans_history.append(attempt_record)
+
         if result.passed:
             passed = True
             break
@@ -100,6 +110,7 @@ def run_scenario(scenario_path: str) -> None:
         "attempts_used": attempts_used,
         "plan": plan_steps_data,
         "errors": errors_data,
+        "attempts": plans_history,
         "expected_files": expected_files,
         "missing_expected_files": missing_files,
         "extra_files": extra_files,
